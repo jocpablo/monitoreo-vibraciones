@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Monitoreo de Vibraciones – Múltiples Máquinas + Config. Alarma</title>
+  
+  <!-- Importar Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Adaptador de fechas para Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+  <style>
+    /* Estilos "Windows 11-like" */
+    :root {
+      --primary-color: #0067C8;
+      --secondary-color: #0052A8;
+      --background-color: #f0f4fa;
+      --card-background: #ffffff;
+      --input-border: #ccc;
+      --input-border-focus: #0067C8;
+      --normal-bg: #28a745;
+      --alert-bg: #ffc107;
+      --alarm-bg: #dc3545;
+      --font-family: 'Segoe UI', Tahoma, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font-family);
+      background: linear-gradient(115deg, #edf2fb, #f0f4fa);
+      min-height: 100vh;
+      display: flex;
+      flex-wrap: wrap;
+    }
+    /* Logo */
+    #cornerLogo {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      width: 80px;
+      z-index: 999;
+      opacity: 0.9;
+      transition: opacity 0.3s;
+    }
+    #cornerLogo:hover { opacity: 1.0; }
+
+    /* SIDEBAR */
+    #sidebar {
+      width: 300px;
+      min-width: 250px;
+      max-width: 600px;
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(8px);
+      border-right: 1px solid #ccc;
+      padding: 10px;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+      border-top-right-radius: 15px;
+      border-bottom-right-radius: 15px;
+      margin: 10px;
+      height: calc(100vh - 20px);
+      overflow-y: auto;
+      resize: horizontal;
+    }
+    #sidebar h2 {
+      margin-top: 0;
+      font-size: 1.2em;
+      text-align: center;
+      color: #333;
+    }
+    /* Select para agrupar en el sidebar */
+    #sidebarGroupBy {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 5px;
+      font-size: 1em;
+    }
+    #machineList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #machineList li {
+      margin: 8px 0;
+      background: var(--card-background);
+      padding: 8px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #ddd;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    #machineList li span {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    #machineList li button {
+      margin-left: 5px;
+      font-size: 0.8em;
+      padding: 3px 8px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: var(--primary-color);
+      color: #fff;
+      transition: background 0.2s;
+    }
+    #machineList li button:hover { background: var(--secondary-color); }
+    #nuevoBtn {
+      margin-top: 10px;
+      width: 100%;
+      font-size: 1em;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: var(--primary-color);
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      cursor: pointer;
+    }
+    #nuevoBtn:hover { background: var(--secondary-color); }
+
+    /* CONTENEDOR PRINCIPAL */
+    .container {
+      flex: 1;
+      margin: 10px;
+      background: var(--card-background);
+      padding: 20px 30px;
+      border-radius: 15px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      position: relative;
+      min-width: 300px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.6em;
+      color: #444;
+    }
+    /* Configuración de la Máquina */
+    .header-form {
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .header-form h2 { margin-top: 0; font-size: 1.2em; color: #333; }
+    .header-form div { margin-bottom: 10px; }
+    .header-form label {
+      font-weight: 500;
+      margin-right: 5px;
+      color: #444;
+    }
+    .header-form input[type="text"],
+    .header-form input[type="number"],
+    .header-form select {
+      padding: 6px;
+      margin-right: 10px;
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      width: auto;
+      font-size: 0.95em;
+    }
+    .header-form input:focus,
+    .header-form select:focus {
+      border-color: var(--input-border-focus);
+      outline: none;
+    }
+    #thresholdDisplay { font-size: 0.9em; color: #555; margin-top: 10px; }
+    .config-buttons { margin-top: 10px; }
+    .config-buttons button {
+      margin-right: 10px;
+      padding: 6px 12px;
+      font-size: 0.9em;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background: var(--primary-color);
+      color: #fff;
+      box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+    }
+    .config-buttons button:hover { background: var(--secondary-color); }
+    .alarm-config {
+      background: #eef;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 20px;
+      margin-bottom: 20px;
+      border: 1px dashed #aaa;
+    }
+    .alarm-config h2 { margin-top: 0; font-size: 1em; }
+    /* Botón de Status General */
+    #statusBtn {
+      padding: 6px 12px;
+      font-size: 0.9em;
+      cursor: pointer;
+      margin-left: 10px;
+      transition: background-color 0.3s;
+      border: none;
+      border-radius: 6px;
+      background: #ccc;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    #statusBtn:hover { background: #bbb; }
+    /* Puntos de Medición */
+    .points-container { margin-bottom: 20px; }
+    .measurement-point {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .measurement-point header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    /* Input editable para el nombre del punto */
+    .measurement-point header input.point-name {
+      font-size: 1em;
+      padding: 4px;
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      width: 70%;
+    }
+    .statsDisplay {
+      font-size: 0.9em;
+      margin-bottom: 10px;
+      background: #eef;
+      padding: 5px;
+      border-radius: 4px;
+      border: 1px dashed #ccc;
+    }
+    .readings-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      background: #fff;
+      border-radius: 6px;
+    }
+    .readings-table th,
+    .readings-table td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #ddd;
+    }
+    .readings-table th { background: var(--primary-color); color: #fff; }
+    .reading-input {
+      width: 80px;
+      padding: 5px;
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      text-align: center;
+    }
+    .smallBtn {
+      font-size: 0.8em;
+      padding: 6px 10px;
+      margin-top: 5px;
+      background: var(--primary-color);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .smallBtn:hover { background: var(--secondary-color); }
+    /* Gráficos */
+    #chartContainer, #accChartContainer { margin-top: 30px; }
+    canvas {
+      background: var(--card-background);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 800px;
+      height: 400px;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      background: var(--primary-color);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover { background: var(--secondary-color); }
+    /* DASHBOARD */
+    #dashboardContainer {
+      display: none;
+      margin: 10px;
+      flex: 1;
+      position: relative;
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(8px);
+      border-radius: 15px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 20px 30px;
+      min-width: 300px;
+    }
+    #dashboardContainer h2 { text-align: center; margin-top: 0; color: #444; }
+    #dashboardContent table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #dashboardContent thead { background: var(--primary-color); color: #fff; }
+    #dashboardContent th, #dashboardContent td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+      font-size: 0.95em;
+    }
+    .status-normal { background-color: var(--normal-bg); color: #fff; font-weight: bold; }
+    .status-alerta { background-color: var(--alert-bg); color: #333; font-weight: bold; }
+    .status-alarma { background-color: var(--alarm-bg); color: #fff; font-weight: bold; }
+    .status-otro { background-color: #ccc; color: #333; font-weight: bold; }
+
+    /* Botones para exportar/importar (File System Access API) */
+    .fs-buttons {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .fs-buttons button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 1em;
+    }
+
+    /* RESPONSIVE: Smartphones */
+    @media (max-width: 600px) {
+      body { flex-direction: column; }
+      #sidebar {
+        width: 100%;
+        min-width: 100%;
+        margin: 0 0 10px 0;
+        height: auto;
+        resize: none;
+      }
+      .container, #dashboardContainer {
+        width: 100%;
+        padding: 10px;
+        margin: 0 5px;
+      }
+      canvas { max-width: 100%; height: auto; }
+      #machineList li span { max-width: 150px; }
+    }
+
+    /* RESPONSIVE: Pantallas grandes (4K) */
+    @media (min-width: 2560px) {
+      body { font-size: 1.2em; }
+      .container {
+        max-width: 1920px;
+        margin: auto;
+      }
+      #sidebar {
+        max-width: 400px;
+      }
+      canvas {
+        max-width: 1200px;
+        height: 600px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Logo -->
+  <img id="cornerLogo" src="images/logo.png" alt="Mi Logo" />
+
+  <!-- MENÚ LATERAL (Sidebar) -->
+  <div id="sidebar">
+    <h2>Máquinas</h2>
+    <!-- Select para agrupar máquinas en el sidebar -->
+    <label for="sidebarGroupBy" style="display:block; margin-bottom:5px;">Agrupar por:</label>
+    <select id="sidebarGroupBy">
+      <option value="none">Sin Agrupar</option>
+      <option value="machinePlanta">Por Planta</option>
+      <option value="machineInstallation">Por Tipo Instalación</option>
+      <option value="machinePowerKw">Por Potencia</option>
+    </select>
+    <ul id="machineList"></ul>
+    <button type="button" id="nuevoBtn">Nueva Máquina</button>
+  </div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="container" id="mainContainer">
+    <h1>Monitoreo de Vibraciones – Múltiples Máquinas + Config. Alarma</h1>
+    
+    <!-- Configuración de la Máquina -->
+    <div class="header-form" id="configForm">
+      <h2>Configuración de la Máquina</h2>
+      <div>
+        <label>Nombre del Equipo:</label>
+        <input type="text" id="machineName" value="">
+        <button type="button" id="statusBtn">Status General</button>
+      </div>
+      <div>
+        <label>Asset:</label>
+        <input type="text" id="machineAsset" value="">
+        <label>Area:</label>
+        <input type="text" id="machineArea" value="">
+        <label>Planta:</label>
+        <input type="text" id="machinePlanta" value="">
+      </div>
+      <div>
+        <label>Potencia (kW):</label>
+        <input type="number" id="machinePowerKw" value="" step="any">
+        <label>Potencia (HP):</label>
+        <input type="number" id="machinePowerHp" value="" step="any">
+        <label>RPM:</label>
+        <input type="number" id="machineRpm" value="">
+        <label>Tipo Instalación:</label>
+        <select id="machineInstallation">
+          <option value="rigido">Rígido</option>
+          <option value="flexible">Flexible</option>
+          <option value="directo">Acople Directo</option>
+        </select>
+      </div>
+      <div>
+        <label>Configuración de Vibración:</label>
+        <select id="vibrationConfig">
+          <option value="config1" selected>Config 1 (2.8/4.5)</option>
+          <option value="config2">Config 2 (4.5/7.1)</option>
+          <option value="config3">Config 3 (7.1/11.0)</option>
+        </select>
+      </div>
+      <!-- Configuración de Alarma -->
+      <div class="alarm-config">
+        <h2>Configuración de Alarma</h2>
+        <label style="margin-right:20px;">
+          <input type="checkbox" id="useIso10816" checked> 10816-2
+        </label>
+        <label>
+          <input type="checkbox" id="useEstadistico"> Estadístico
+        </label>
+      </div>
+      <div id="thresholdDisplay"></div>
+      <div class="config-buttons">
+        <button type="button" id="saveConfigBtn">Guardar Config.</button>
+        <button type="button" id="editConfigBtn" style="display:none;">Editar Config.</button>
+      </div>
+    </div>
+    
+    <!-- Botón para Agregar Punto de Medición -->
+    <div style="margin-bottom:20px;">
+      <button type="button" id="addPointBtn">Agregar Punto de Medición</button>
+    </div>
+    
+    <!-- Contenedor de Puntos de Medición -->
+    <div class="points-container" id="pointsContainer"></div>
+    
+    <!-- Gráficos de Velocidad y Aceleración -->
+    <div id="chartContainer">
+      <h2>Gráfico de Velocidad</h2>
+      <canvas id="trendChart"></canvas>
+    </div>
+    <div id="accChartContainer">
+      <h2>Gráfico de Aceleración</h2>
+      <canvas id="accChart"></canvas>
+    </div>
+    
+    <!-- Botón Guardar Datos y botones File System Access API -->
+    <div style="text-align: center; margin-top: 20px;">
+      <button type="button" id="guardarDatosBtn">Guardar Datos</button>
+    </div>
+    <div class="fs-buttons">
+      <button type="button" id="guardarArchivoBtn">Guardar en Archivo</button>
+      <button type="button" id="cargarArchivoBtn">Cargar desde Archivo</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboardContainer">
+    <h2>Dashboard de Máquinas</h2>
+    <div id="dashboardContent"></div>
+    <!-- Nueva sección para el gráfico de estados -->
+    <div style="margin-top:20px; text-align:center;">
+      <label for="chartTypeSelect" style="margin-right:5px;">Tipo de gráfico:</label>
+      <select id="chartTypeSelect">
+        <option value="pie">Pastel</option>
+        <option value="doughnut">Dona</option>
+        <option value="bar">Barras</option>
+        <option value="polarArea">Polar Area</option>
+      </select>
+    </div>
+    <div style="margin-top:20px;">
+      <canvas id="statusChart" style="max-width:800px; margin:auto;"></canvas>
+    </div>
+    <div style="text-align: center; margin-top: 20px;">
+      <button type="button" id="returnBtn">Volver a Configuración</button>
+    </div>
+  </div>
+
+  <!-- CÓDIGO JS -->
+  <script>
+    /*********************************************************
+     * VARIABLES GLOBALES
+     ********************************************************/
+    let unsavedChanges = false;
+    let currentMachineId = null;
+    let pointCountGlobal = 0;
+    let trendChart = null;
+    let accChart = null;
+    const pointsData = {};
+
+    // Referencias de elementos
+    const chkIso10816 = document.getElementById("useIso10816");
+    const chkEstadistico = document.getElementById("useEstadistico");
+    const machineNameInput = document.getElementById("machineName");
+    const powerKwInput = document.getElementById("machinePowerKw");
+    const powerHpInput = document.getElementById("machinePowerHp");
+    const mainContainer = document.getElementById("mainContainer");
+    const dashboardContainer = document.getElementById("dashboardContainer");
+    const dashboardContent = document.getElementById("dashboardContent");
+    const machineListEl = document.getElementById("machineList");
+    const sidebarGroupBy = document.getElementById("sidebarGroupBy");
+
+    document.querySelectorAll("#configForm input, #configForm select").forEach(el => {
+      el.addEventListener("input", () => { unsavedChanges = true; });
+      el.addEventListener("change", () => { unsavedChanges = true; });
+    });
+
+    /*********************************************************
+     * LOCAL STORAGE
+     ********************************************************/
+    function getAllMachines() {
+      return JSON.parse(localStorage.getItem("allMachines") || "[]");
+    }
+    function saveAllMachines(machines) {
+      localStorage.setItem("allMachines", JSON.stringify(machines));
+    }
+    function addOrUpdateMachine(machineId, machineData) {
+      const machines = getAllMachines();
+      const index = machines.findIndex(m => m.id === machineId);
+      if (index >= 0) { machines[index] = machineData; }
+      else { machines.push(machineData); }
+      saveAllMachines(machines);
+    }
+    function removeMachine(machineId) {
+      const machines = getAllMachines();
+      const newMachines = machines.filter(m => m.id !== machineId);
+      saveAllMachines(newMachines);
+    }
+
+    /*********************************************************
+     * FUNCIÓN DE AGRUPAMIENTO (para el sidebar)
+     ********************************************************/
+    function groupMachinesBy(criteria) {
+      const machines = getAllMachines();
+      const groups = {};
+      machines.forEach(machine => {
+        let key = "";
+        if (criteria === "machinePowerKw") {
+          const power = parseFloat(machine.config.machinePowerKw);
+          if (isNaN(power)) key = "Desconocido";
+          else if (power < 10) key = "0-10 kW";
+          else if (power < 50) key = "10-50 kW";
+          else key = "50+ kW";
+        } else {
+          key = machine.config[criteria] || "Desconocido";
+        }
+        if (!groups[key]) { groups[key] = []; }
+        groups[key].push(machine);
+      });
+      // Ordenar cada grupo alfabéticamente por nombre
+      Object.keys(groups).forEach(key => {
+        groups[key].sort((a, b) => (a.config.machineName || "").localeCompare(b.config.machineName || ""));
+      });
+      return groups;
+    }
+
+    /*********************************************************
+     * MENÚ LATERAL (Sidebar)
+     ********************************************************/
+    function updateMachineList() {
+      machineListEl.innerHTML = "";
+      // Agregar "DASHBOARD"
+      const liDash = document.createElement("li");
+      const spanDash = document.createElement("span");
+      spanDash.textContent = "DASHBOARD";
+      const dashBtn = document.createElement("button");
+      dashBtn.textContent = "Ver";
+      dashBtn.addEventListener("click", () => {
+        if (unsavedChanges && !confirm("Hay cambios sin guardar. ¿Desea continuar?")) return;
+        showDashboard();
+      });
+      liDash.appendChild(spanDash);
+      liDash.appendChild(dashBtn);
+      machineListEl.appendChild(liDash);
+
+      const groupOption = sidebarGroupBy.value;
+      if (groupOption === "none") {
+        // Obtener y ordenar máquinas alfabéticamente por nombre
+        const machines = getAllMachines().sort((a, b) => (a.config.machineName || "").localeCompare(b.config.machineName || ""));
+        machines.forEach(machine => {
+          const li = document.createElement("li");
+          const span = document.createElement("span");
+          span.textContent = machine.config.machineName || ("Maquina " + machine.id);
+          const loadBtn = document.createElement("button");
+          loadBtn.textContent = "Cargar";
+          loadBtn.addEventListener("click", () => {
+            if (unsavedChanges && !confirm("Hay cambios sin guardar. ¿Desea continuar?")) return;
+            loadMachine(machine.id);
+          });
+          const delBtn = document.createElement("button");
+          delBtn.textContent = "Eliminar";
+          delBtn.style.backgroundColor = "#dc3545";
+          delBtn.style.color = "#fff";
+          delBtn.addEventListener("click", () => {
+            if (confirm("¿Seguro que deseas eliminar esta máquina?")) {
+              removeMachine(machine.id);
+              updateMachineList();
+            }
+          });
+          li.appendChild(span);
+          li.appendChild(loadBtn);
+          li.appendChild(delBtn);
+          machineListEl.appendChild(li);
+        });
+      } else {
+        const grouped = groupMachinesBy(groupOption);
+        Object.keys(grouped).forEach(groupKey => {
+          const liGroupHeader = document.createElement("li");
+          liGroupHeader.style.background = "#eee";
+          liGroupHeader.style.fontWeight = "bold";
+          liGroupHeader.textContent = groupKey;
+          machineListEl.appendChild(liGroupHeader);
+          grouped[groupKey].forEach(machine => {
+            const liMachine = document.createElement("li");
+            const span = document.createElement("span");
+            span.textContent = machine.config.machineName || ("Maquina " + machine.id);
+            const loadBtn = document.createElement("button");
+            loadBtn.textContent = "Cargar";
+            loadBtn.addEventListener("click", () => {
+              if (unsavedChanges && !confirm("Hay cambios sin guardar. ¿Desea continuar?")) return;
+              loadMachine(machine.id);
+            });
+            const delBtn = document.createElement("button");
+            delBtn.textContent = "Eliminar";
+            delBtn.style.backgroundColor = "#dc3545";
+            delBtn.style.color = "#fff";
+            delBtn.addEventListener("click", () => {
+              if (confirm("¿Seguro que deseas eliminar esta máquina?")) {
+                removeMachine(machine.id);
+                updateMachineList();
+              }
+            });
+            liMachine.appendChild(span);
+            liMachine.appendChild(loadBtn);
+            liMachine.appendChild(delBtn);
+            machineListEl.appendChild(liMachine);
+          });
+        });
+      }
+    }
+    sidebarGroupBy.addEventListener("change", updateMachineList);
+
+    /*********************************************************
+     * ASIGNAR EVENTO AL BOTÓN "NUEVA MÁQUINA"
+     ********************************************************/
+    document.getElementById("nuevoBtn").addEventListener("click", () => {
+      if (unsavedChanges && !confirm("Hay cambios sin guardar. ¿Desea continuar?")) return;
+      createNewMachine();
+    });
+
+    /*********************************************************
+     * MOSTRAR / OCULTAR DASHBOARD
+     ********************************************************/
+    function showDashboard() {
+      mainContainer.style.display = "none";
+      dashboardContainer.style.display = "block";
+      generateDashboard();
+    }
+    function hideDashboard() {
+      mainContainer.style.display = "block";
+      dashboardContainer.style.display = "none";
+    }
+    document.getElementById("returnBtn").addEventListener("click", hideDashboard);
+
+    /*********************************************************
+     * CREAR / LIMPIAR UI
+     ********************************************************/
+    function createNewMachine() {
+      clearUI();
+      currentMachineId = Date.now().toString();
+      unsavedChanges = false;
+    }
+    function clearUI() {
+      currentMachineId = null;
+      pointCountGlobal = 0;
+      machineNameInput.value = "";
+      document.getElementById("machineAsset").value = "";
+      document.getElementById("machineArea").value = "";
+      document.getElementById("machinePlanta").value = "";
+      powerKwInput.value = "";
+      powerHpInput.value = "";
+      document.getElementById("machineRpm").value = "";
+      document.getElementById("machineInstallation").value = "rigido";
+      document.getElementById("vibrationConfig").value = "config1";
+      chkIso10816.checked = true;
+      chkEstadistico.checked = false;
+      document.getElementById("pointsContainer").innerHTML = "";
+      if (trendChart) { trendChart.destroy(); trendChart = null; }
+      if (accChart) { accChart.destroy(); accChart = null; }
+      for (let key in pointsData) { delete pointsData[key]; }
+      const statusBtn = document.getElementById("statusBtn");
+      statusBtn.textContent = "Status General";
+      statusBtn.style.backgroundColor = "";
+      unsavedChanges = false;
+    }
+
+    /*********************************************************
+     * CONVERSIÓN kW <-> HP
+     ********************************************************/
+    let updatingPower = false;
+    powerKwInput.addEventListener("input", function() {
+      if (updatingPower) return;
+      updatingPower = true;
+      const kw = parseFloat(this.value) || 0;
+      powerHpInput.value = (kw * 1.34102).toFixed(2);
+      updatingPower = false;
+    });
+    powerHpInput.addEventListener("input", function() {
+      if (updatingPower) return;
+      updatingPower = true;
+      const hp = parseFloat(this.value) || 0;
+      powerKwInput.value = (hp * 0.7457).toFixed(2);
+      updatingPower = false;
+    });
+
+    /*********************************************************
+     * CALCULAR UMBRALES ISO 10816
+     ********************************************************/
+    function getIsoThresholds() {
+      const vibConfig = document.getElementById("vibrationConfig").value;
+      let velAlert, velAlarm;
+      if (vibConfig === "config2") { velAlert = 4.5; velAlarm = 7.1; }
+      else if (vibConfig === "config3") { velAlert = 7.1; velAlarm = 11.0; }
+      else { velAlert = 2.8; velAlarm = 4.5; }
+      let accAlert = 0.5, accAlarm = 0.7;
+      return {
+        velocity: { alert: velAlert, alarm: velAlarm },
+        acceleration: { alert: accAlert, alarm: accAlarm },
+      };
+    }
+
+    /*********************************************************
+     * ESTADÍSTICOS
+     ********************************************************/
+    function computeStats(values) {
+      if (values.length === 0) return null;
+      let sum = values.reduce((a, b) => a + b, 0);
+      let avg = sum / values.length;
+      let variance = values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length;
+      let std = Math.sqrt(variance);
+      return { avg, std, alerta: avg + std, alarma: avg + 2 * std };
+    }
+    function getStatsThresholdsForPoint(pointDiv) {
+      const rows = pointDiv.querySelectorAll(".readingRow");
+      const velocityValues = [];
+      const accelerationValues = [];
+      rows.forEach(row => {
+        const velVal = parseFloat(row.querySelector(".velInput")?.value);
+        const accVal = parseFloat(row.querySelector(".accInput")?.value);
+        if (!isNaN(velVal)) velocityValues.push(velVal);
+        if (!isNaN(accVal)) accelerationValues.push(accVal);
+      });
+      const velStats = computeStats(velocityValues);
+      const accStats = computeStats(accelerationValues);
+      const velAlert = velStats ? velStats.alerta : 99999;
+      const velAlarm = velStats ? velStats.alarma : 999999;
+      const accAlert = accStats ? accStats.alerta : 99999;
+      const accAlarm = accStats ? accStats.alarma : 999999;
+      return {
+        velocity: { alert: velAlert, alarm: velAlarm },
+        acceleration: { alert: accAlert, alarm: accAlarm },
+      };
+    }
+    function getThresholdsForPoint(pointDiv) {
+      if (chkEstadistico.checked) return getStatsThresholdsForPoint(pointDiv);
+      return getIsoThresholds();
+    }
+    function updateStats() {
+      const points = document.querySelectorAll(".measurement-point");
+      points.forEach(pointDiv => {
+        const rows = pointDiv.querySelectorAll(".readingRow");
+        const velocityValues = [];
+        const accelerationValues = [];
+        rows.forEach(row => {
+          const velVal = parseFloat(row.querySelector(".velInput")?.value);
+          const accVal = parseFloat(row.querySelector(".accInput")?.value);
+          if (!isNaN(velVal)) velocityValues.push(velVal);
+          if (!isNaN(accVal)) accelerationValues.push(accVal);
+        });
+        const statsDiv = pointDiv.querySelector(".statsDisplay");
+        let statsHTML = "<strong>Calculo Estadístico de Alertas y Alarmas:</strong><br>";
+        const velStats = computeStats(velocityValues);
+        if (velStats) {
+          statsHTML += `Velocidad: Promedio = ${velStats.avg.toFixed(2)} mm/s, Desv = ${velStats.std.toFixed(2)}, Alerta = ${velStats.alerta.toFixed(2)}, Alarma = ${velStats.alarma.toFixed(2)}<br>`;
+        } else { statsHTML += "Velocidad: Sin datos.<br>"; }
+        const accStats = computeStats(accelerationValues);
+        if (accStats) {
+          statsHTML += `Aceleración: Promedio = ${accStats.avg.toFixed(2)} G, Desv = ${accStats.std.toFixed(2)}, Alerta = ${accStats.alerta.toFixed(2)}, Alarma = ${accStats.alarma.toFixed(2)}`;
+        } else { statsHTML += "Aceleración: Sin datos."; }
+        if (statsDiv) { statsDiv.innerHTML = statsHTML; }
+      });
+    }
+    function updateThresholdDisplay() {
+      const t = getIsoThresholds();
+      document.getElementById("thresholdDisplay").innerHTML = `
+        <strong>Umbrales (ISO 10816):</strong>
+        Vel: Alerta ≥ ${t.velocity.alert.toFixed(1)} mm/s, Alarma ≥ ${t.velocity.alarm.toFixed(1)} mm/s.
+        Acel: Alerta ≥ ${t.acceleration.alert.toFixed(1)} G, Alarma ≥ ${t.acceleration.alarm.toFixed(1)} G.
+      `;
+      return t;
+    }
+
+    /*********************************************************
+     * ACTUALIZAR FILAS Y PUNTOS
+     ********************************************************/
+    function updateReadingRow(row, thresholdsPoint) {
+      const velInput = row.querySelector(".velInput");
+      const accInput = row.querySelector(".accInput");
+      const velLevelCell = row.querySelector(".velLevel");
+      const accLevelCell = row.querySelector(".accLevel");
+      const velRecCell = row.querySelector(".velRec");
+      const accRecCell = row.querySelector(".accRec");
+      const velAlert = thresholdsPoint.velocity.alert;
+      const velAlarm = thresholdsPoint.velocity.alarm;
+      const accAlert = thresholdsPoint.acceleration.alert;
+      const accAlarm = thresholdsPoint.acceleration.alarm;
+      const velVal = parseFloat(velInput.value);
+      if (isNaN(velVal)) {
+        velLevelCell.textContent = "";
+        velRecCell.textContent = "";
+        velInput.style.backgroundColor = "";
+      } else {
+        if (velVal < velAlert) {
+          velLevelCell.textContent = "Normal";
+          velRecCell.textContent = "Condición normal.";
+          velInput.style.backgroundColor = "var(--normal-bg)";
+        } else if (velVal < velAlarm) {
+          velLevelCell.textContent = "Alerta";
+          velRecCell.textContent = "Verificar mantenimiento.";
+          velInput.style.backgroundColor = "var(--alert-bg)";
+        } else {
+          velLevelCell.textContent = "Alarma";
+          velRecCell.textContent = "Suspender operación.";
+          velInput.style.backgroundColor = "var(--alarm-bg)";
+        }
+      }
+      const accVal = parseFloat(accInput.value);
+      if (isNaN(accVal)) {
+        accLevelCell.textContent = "";
+        accRecCell.textContent = "";
+        accInput.style.backgroundColor = "";
+      } else {
+        if (accVal < accAlert) {
+          accLevelCell.textContent = "Normal";
+          accRecCell.textContent = "Condición normal.";
+          accInput.style.backgroundColor = "var(--normal-bg)";
+        } else if (accVal < accAlarm) {
+          accLevelCell.textContent = "Alerta";
+          accRecCell.textContent = "Verificar balance.";
+          accInput.style.backgroundColor = "var(--alert-bg)";
+        } else {
+          accLevelCell.textContent = "Alarma";
+          accRecCell.textContent = "Suspender operación.";
+          accInput.style.backgroundColor = "var(--alarm-bg)";
+        }
+      }
+    }
+    function updateAllReadingRows() {
+      document.querySelectorAll(".measurement-point").forEach(pointDiv => {
+        const thresholdsPoint = getThresholdsForPoint(pointDiv);
+        pointDiv.querySelectorAll(".readingRow").forEach(row => {
+          updateReadingRow(row, thresholdsPoint);
+        });
+      });
+    }
+    function addReadingRow(pointDiv) {
+      const tbody = pointDiv.querySelector("tbody");
+      const row = document.createElement("tr");
+      row.classList.add("readingRow");
+      // Fecha
+      const tdDate = document.createElement("td");
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.style.width = "100%";
+      tdDate.appendChild(dateInput);
+      row.appendChild(tdDate);
+      // Velocidad
+      const tdVel = document.createElement("td");
+      const velInput = document.createElement("input");
+      velInput.type = "number";
+      velInput.step = "any";
+      velInput.classList.add("velInput", "reading-input");
+      tdVel.appendChild(velInput);
+      row.appendChild(tdVel);
+      // Nivel Vel
+      const tdVelLevel = document.createElement("td");
+      tdVelLevel.classList.add("velLevel");
+      row.appendChild(tdVelLevel);
+      // Rec. Vel
+      const tdVelRec = document.createElement("td");
+      tdVelRec.classList.add("velRec");
+      row.appendChild(tdVelRec);
+      // Aceleración
+      const tdAcc = document.createElement("td");
+      const accInput = document.createElement("input");
+      accInput.type = "number";
+      accInput.step = "any";
+      accInput.classList.add("accInput", "reading-input");
+      tdAcc.appendChild(accInput);
+      row.appendChild(tdAcc);
+      // Nivel Acc
+      const tdAccLevel = document.createElement("td");
+      tdAccLevel.classList.add("accLevel");
+      row.appendChild(tdAccLevel);
+      // Rec. Acc
+      const tdAccRec = document.createElement("td");
+      tdAccRec.classList.add("accRec");
+      row.appendChild(tdAccRec);
+      tbody.appendChild(row);
+    }
+
+    /*********************************************************
+     * CREAR PUNTO DE MEDICIÓN CON IMPORTACIÓN CSV
+     * (Incluye campo editable para el nombre del punto)
+     ********************************************************/
+    function addMeasurementPoint() {
+      pointCountGlobal++;
+      const container = document.getElementById("pointsContainer");
+      const pointDiv = document.createElement("div");
+      pointDiv.classList.add("measurement-point");
+      pointDiv.setAttribute("data-point", pointCountGlobal);
+      
+      // Encabezado con input editable para el nombre
+      const header = document.createElement("header");
+      const pointNameInput = document.createElement("input");
+      pointNameInput.type = "text";
+      pointNameInput.value = `Punto de Medición ${pointCountGlobal}`;
+      pointNameInput.classList.add("point-name");
+      header.appendChild(pointNameInput);
+      pointDiv.appendChild(header);
+      
+      // Sección de estadísticas
+      const statsDiv = document.createElement("div");
+      statsDiv.classList.add("statsDisplay");
+      statsDiv.innerHTML = "<em>Calculo Estadístico de Alertas y Alarmas: Sin datos</em>";
+      pointDiv.appendChild(statsDiv);
+      
+      // Crear dataset para gráficos
+      const color = randomColor();
+      pointsData[pointCountGlobal] = {
+        label: pointNameInput.value,
+        color,
+        data: []
+      };
+      
+      // Tabla de lecturas
+      const table = document.createElement("table");
+      table.classList.add("readings-table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = `
+        <tr>
+          <th>Fecha Lectura</th>
+          <th>Velocidad (mm/s)</th>
+          <th>Nivel Vel</th>
+          <th>Rec. Vel</th>
+          <th>Aceleración (G's)</th>
+          <th>Nivel Acc</th>
+          <th>Rec. Acc</th>
+        </tr>`;
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      table.appendChild(tbody);
+      pointDiv.appendChild(table);
+      
+      // Botón "Agregar Lectura"
+      const addReadingBtn = document.createElement("button");
+      addReadingBtn.type = "button";
+      addReadingBtn.textContent = "Agregar Lectura";
+      addReadingBtn.classList.add("smallBtn");
+      addReadingBtn.addEventListener("click", () => addReadingRow(pointDiv));
+      pointDiv.appendChild(addReadingBtn);
+      
+      // Botón "Importar CSV"
+      const importCSVBtn = document.createElement("button");
+      importCSVBtn.type = "button";
+      importCSVBtn.textContent = "Importar CSV";
+      importCSVBtn.classList.add("smallBtn");
+      importCSVBtn.addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".csv";
+        input.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              const csvData = evt.target.result;
+              const lines = csvData.split(/\r\n|\n/);
+              lines.forEach(line => {
+                if(line.trim() === "") return;
+                const [dateRaw, velocity, acceleration] = line.split(",");
+                if(dateRaw && velocity && acceleration) {
+                  addReadingRow(pointDiv);
+                  const tbody = pointDiv.querySelector("tbody");
+                  const lastRow = tbody.lastElementChild;
+                  const originalDate = dateRaw.trim();
+                  let finalDate = "";
+                  if (originalDate.includes("/")) {
+                    const [mm, dd, yyyy] = originalDate.split("/");
+                    if (mm && dd && yyyy) {
+                      finalDate = `${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+                    }
+                  } else {
+                    finalDate = originalDate;
+                  }
+                  lastRow.querySelector("td:first-child input[type='date']").value = finalDate;
+                  lastRow.querySelector(".velInput").value = velocity.trim();
+                  lastRow.querySelector(".accInput").value = acceleration.trim();
+                }
+              });
+              updateAllReadingRows();
+              updateChart();
+              updateAccChart();
+              updateStats();
+            };
+            reader.readAsText(file);
+          }
+        });
+        input.click();
+      });
+      pointDiv.appendChild(importCSVBtn);
+      
+      container.appendChild(pointDiv);
+      updateChart();
+      updateAccChart();
+      updateStats();
+    }
+
+    function randomColor() {
+      const r = Math.floor(Math.random() * 255);
+      const g = Math.floor(Math.random() * 255);
+      const b = Math.floor(Math.random() * 255);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    /*********************************************************
+     * ACTUALIZAR GRÁFICOS
+     ********************************************************/
+    function updateChart() {
+      const points = document.querySelectorAll(".measurement-point");
+      const chartDatasets = [];
+      points.forEach(div => {
+        const pointId = div.getAttribute("data-point");
+        const datasetObj = pointsData[pointId];
+        datasetObj.data = [];
+        const rows = div.querySelectorAll(".readingRow");
+        rows.forEach(row => {
+          const dateVal = row.querySelector("td:first-child input[type='date']")?.value;
+          const velVal = parseFloat(row.querySelector(".velInput")?.value);
+          if (dateVal && !isNaN(velVal)) {
+            datasetObj.data.push({ x: dateVal, y: velVal });
+          }
+        });
+        if (datasetObj.data.length > 0) {
+          chartDatasets.push({
+            label: datasetObj.label,
+            data: datasetObj.data,
+            borderColor: datasetObj.color,
+            backgroundColor: datasetObj.color,
+            fill: false
+          });
+        }
+      });
+      if (!trendChart) {
+        const ctx = document.getElementById("trendChart").getContext("2d");
+        trendChart = new Chart(ctx, {
+          type: "line",
+          data: { datasets: chartDatasets },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                type: "time",
+                time: { unit: "day", displayFormats: { day: "yyyy-MM-dd" } },
+                title: { display: true, text: "Fecha" }
+              },
+              y: { title: { display: true, text: "Velocidad (mm/s)" } }
+            }
+          }
+        });
+      } else {
+        trendChart.data.datasets = chartDatasets;
+        trendChart.update();
+      }
+    }
+    function updateAccChart() {
+      const points = document.querySelectorAll(".measurement-point");
+      const chartDatasets = [];
+      points.forEach(div => {
+        const pointId = div.getAttribute("data-point");
+        const datasetObj = pointsData[pointId];
+        const accData = [];
+        const rows = div.querySelectorAll(".readingRow");
+        rows.forEach(row => {
+          const dateVal = row.querySelector("td:first-child input[type='date']")?.value;
+          const accVal = parseFloat(row.querySelector(".accInput")?.value);
+          if (dateVal && !isNaN(accVal)) {
+            accData.push({ x: dateVal, y: accVal });
+          }
+        });
+        if (accData.length > 0) {
+          chartDatasets.push({
+            label: datasetObj.label,
+            data: accData,
+            borderColor: datasetObj.color,
+            backgroundColor: datasetObj.color,
+            fill: false
+          });
+        }
+      });
+      if (!accChart) {
+        const ctx = document.getElementById("accChart").getContext("2d");
+        accChart = new Chart(ctx, {
+          type: "line",
+          data: { datasets: chartDatasets },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                type: "time",
+                time: { unit: "day", displayFormats: { day: "yyyy-MM-dd" } },
+                title: { display: true, text: "Fecha" }
+              },
+              y: { title: { display: true, text: "Aceleración (G)" } }
+            }
+          }
+        });
+      } else {
+        accChart.data.datasets = chartDatasets;
+        accChart.update();
+      }
+    }
+
+    /*********************************************************
+     * STATUS GENERAL
+     ********************************************************/
+    function getGeneralStatus() {
+      const allRows = document.querySelectorAll(".readingRow");
+      if (allRows.length === 0) return "Sin lecturas";
+      let latestDate = "";
+      let latestRow = null;
+      allRows.forEach(row => {
+        const dateVal = row.querySelector("td:first-child input[type='date']")?.value;
+        if (dateVal && dateVal > latestDate) {
+          latestDate = dateVal;
+          latestRow = row;
+        }
+      });
+      if (!latestRow) return "Sin lecturas";
+      const pointDiv = latestRow.closest(".measurement-point");
+      const thresholdsPoint = getThresholdsForPoint(pointDiv);
+      const velVal = parseFloat(latestRow.querySelector(".velInput")?.value);
+      const accVal = parseFloat(latestRow.querySelector(".accInput")?.value);
+      if (isNaN(velVal) && isNaN(accVal)) return "Sin lecturas válidas";
+      const getCond = (val, alertT, alarmT) => {
+        if (isNaN(val)) return "N/A";
+        if (val < alertT) return "Normal";
+        if (val < alarmT) return "Alerta";
+        return "Alarma";
+      };
+      const vC = getCond(velVal, thresholdsPoint.velocity.alert, thresholdsPoint.velocity.alarm);
+      const aC = getCond(accVal, thresholdsPoint.acceleration.alert, thresholdsPoint.acceleration.alarm);
+      if (vC === "Alarma" || aC === "Alarma") return "Alarma";
+      if (vC === "Alerta" || aC === "Alerta") return "Alerta";
+      if (vC === "Normal" && aC === "Normal") return "Normal";
+      if (vC === "N/A") return aC;
+      if (aC === "N/A") return vC;
+      return "Sin lecturas válidas";
+    }
+    const statusBtn = document.getElementById("statusBtn");
+    statusBtn.addEventListener("click", () => {
+      const s = getGeneralStatus();
+      alert("Status General: " + s);
+      statusBtn.textContent = "Status: " + s;
+      if (s === "Normal") statusBtn.style.backgroundColor = "var(--normal-bg)";
+      else if (s === "Alerta") statusBtn.style.backgroundColor = "var(--alert-bg)";
+      else if (s === "Alarma") statusBtn.style.backgroundColor = "var(--alarm-bg)";
+      else statusBtn.style.backgroundColor = "";
+    });
+
+    /*********************************************************
+     * GUARDAR Y CARGAR (localStorage)
+     ********************************************************/
+    function guardarDatos() {
+      if (!currentMachineId) currentMachineId = Date.now().toString();
+      const config = {
+        machineName: machineNameInput.value,
+        machineAsset: document.getElementById("machineAsset").value,
+        machineArea: document.getElementById("machineArea").value,
+        machinePlanta: document.getElementById("machinePlanta").value,
+        machinePowerKw: powerKwInput.value,
+        machinePowerHp: powerHpInput.value,
+        machineRpm: document.getElementById("machineRpm").value,
+        machineInstallation: document.getElementById("machineInstallation").value,
+        vibrationConfig: document.getElementById("vibrationConfig").value,
+        useIso10816: chkIso10816.checked,
+        useEstadistico: chkEstadistico.checked
+      };
+
+      const points = [];
+      document.querySelectorAll(".measurement-point").forEach(pointDiv => {
+        // Obtener el nombre del punto desde el input editable
+        const pointName = pointDiv.querySelector("header input.point-name")?.value || "";
+        const pointId = pointDiv.getAttribute("data-point");
+        const rows = [];
+        pointDiv.querySelectorAll(".readingRow").forEach(row => {
+          const dateVal = row.querySelector("td:first-child input[type='date']")?.value;
+          const velVal = row.querySelector(".velInput")?.value;
+          const accVal = row.querySelector(".accInput")?.value;
+          if (dateVal || velVal || accVal) {
+            rows.push({ date: dateVal, velocity: velVal, acceleration: accVal });
+          }
+        });
+        points.push({ pointId, pointName, readings: rows });
+      });
+
+      const machineData = {
+        id: currentMachineId,
+        config,
+        points,
+        savedAt: new Date().toLocaleString()
+      };
+
+      addOrUpdateMachine(currentMachineId, machineData);
+      alert("Datos guardados exitosamente en localStorage.");
+      unsavedChanges = false;
+      updateMachineList();
+
+      const s = getGeneralStatus();
+      statusBtn.textContent = "Status: " + s;
+      if (s === "Normal") statusBtn.style.backgroundColor = "var(--normal-bg)";
+      else if (s === "Alerta") statusBtn.style.backgroundColor = "var(--alert-bg)";
+      else if (s === "Alarma") statusBtn.style.backgroundColor = "var(--alarm-bg)";
+      else statusBtn.style.backgroundColor = "";
+    }
+
+    function loadMachine(machineId) {
+      clearUI();
+      hideDashboard();
+      const machines = getAllMachines();
+      const found = machines.find(m => m.id === machineId);
+      if (!found) { alert("No se encontró la máquina en la lista."); return; }
+      currentMachineId = found.id;
+      const c = found.config;
+      machineNameInput.value = c.machineName;
+      document.getElementById("machineAsset").value = c.machineAsset;
+      document.getElementById("machineArea").value = c.machineArea;
+      document.getElementById("machinePlanta").value = c.machinePlanta;
+      powerKwInput.value = c.machinePowerKw;
+      powerHpInput.value = c.machinePowerHp;
+      document.getElementById("machineRpm").value = c.machineRpm;
+      document.getElementById("machineInstallation").value = c.machineInstallation;
+      document.getElementById("vibrationConfig").value = c.vibrationConfig;
+      chkIso10816.checked = c.useIso10816 ?? true;
+      chkEstadistico.checked = c.useEstadistico ?? false;
+
+      found.points.forEach(pt => {
+        addMeasurementPoint();
+        const newPoint = document.getElementById("pointsContainer").lastElementChild;
+        // Asignar nombre guardado al input del punto
+        const pointNameInput = newPoint.querySelector("header input.point-name");
+        if (pointNameInput) {
+          pointNameInput.value = pt.pointName || pointNameInput.value;
+          const pointId = newPoint.getAttribute("data-point");
+          if (pointsData[pointId]) {
+            pointsData[pointId].label = pointNameInput.value;
+          }
+        }
+        pt.readings.forEach(r => {
+          addReadingRow(newPoint);
+          const tbody = newPoint.querySelector("tbody");
+          const lastRow = tbody.lastElementChild;
+          lastRow.querySelector("td:first-child input[type='date']").value = r.date;
+          lastRow.querySelector(".velInput").value = r.velocity;
+          lastRow.querySelector(".accInput").value = r.acceleration;
+        });
+      });
+      unsavedChanges = false;
+      setConfigEditable(false);
+      document.getElementById("saveConfigBtn").style.display = "none";
+      document.getElementById("editConfigBtn").style.display = "inline-block";
+      updateThresholdDisplay();
+      updateAllReadingRows();
+      updateChart();
+      updateAccChart();
+      updateStats();
+    }
+
+    function setConfigEditable(editable) {
+      document.querySelectorAll("#configForm input, #configForm select").forEach(el => {
+        el.disabled = !editable;
+      });
+    }
+    document.getElementById("saveConfigBtn").addEventListener("click", function() {
+      setConfigEditable(false);
+      this.style.display = "none";
+      document.getElementById("editConfigBtn").style.display = "inline-block";
+    });
+    document.getElementById("editConfigBtn").addEventListener("click", function() {
+      setConfigEditable(true);
+      this.style.display = "none";
+      document.getElementById("saveConfigBtn").style.display = "inline-block";
+    });
+    document.getElementById("addPointBtn").addEventListener("click", () => { addMeasurementPoint(); });
+    document.getElementById("guardarDatosBtn").addEventListener("click", () => { guardarDatos(); });
+    chkIso10816.addEventListener("change", () => { updateAllReadingRows(); updateStats(); updateChart(); updateAccChart(); });
+    chkEstadistico.addEventListener("change", () => { updateAllReadingRows(); updateStats(); updateChart(); updateAccChart(); });
+    document.addEventListener("input", () => { updateAllReadingRows(); updateStats(); updateChart(); updateAccChart(); });
+
+    /*********************************************************
+     * DASHBOARD: GENERAR TABLA Y GRÁFICO DE ESTADOS
+     ********************************************************/
+    function generateDashboard() {
+      dashboardContent.innerHTML = "";
+      let machines = getAllMachines();
+      if (!machines || machines.length === 0) {
+        dashboardContent.innerHTML = "<p>No hay máquinas guardadas.</p>";
+        return;
+      }
+      // Ordenar las máquinas alfabéticamente por nombre
+      machines = machines.sort((a, b) => (a.config.machineName || "").localeCompare(b.config.machineName || ""));
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = `
+        <tr>
+          <th>Nombre del Equipo</th>
+          <th>Status</th>
+          <th>Recomendación</th>
+        </tr>
+      `;
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      machines.forEach(m => {
+        const status = getMachineOverallStatus(m);
+        let recomendacion = "";
+        let statusClass = "status-otro";
+        switch(status) {
+          case "Normal":
+            recomendacion = "Operación OK.";
+            statusClass = "status-normal";
+            break;
+          case "Alerta":
+            recomendacion = "Revisar mantenimiento / condición del equipo.";
+            statusClass = "status-alerta";
+            break;
+          case "Alarma":
+            recomendacion = "Suspender operación y revisar inmediatamente.";
+            statusClass = "status-alarma";
+            break;
+          default:
+            recomendacion = "Sin lecturas o información insuficiente.";
+            statusClass = "status-otro";
+        }
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${m.config.machineName || "Sin nombre"}</td>
+          <td class="${statusClass}">${status}</td>
+          <td>${recomendacion}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      dashboardContent.appendChild(table);
+      
+      // Actualizar gráfico de estados
+      updateStatusChart();
+    }
+
+    /*********************************************************
+     * ACTUALIZAR GRÁFICO DE ESTADOS
+     ********************************************************/
+    let statusChart = null;
+    function updateStatusChart() {
+      // Contar máquinas por estado
+      const machines = getAllMachines();
+      const counts = { "Normal": 0, "Alerta": 0, "Alarma": 0, "Sin lecturas": 0 };
+      machines.forEach(m => {
+        const status = getMachineOverallStatus(m);
+        if (counts[status] !== undefined) counts[status]++;
+        else counts["Sin lecturas"]++;
+      });
+      const labels = Object.keys(counts);
+      const data = labels.map(label => counts[label]);
+      // Paleta de colores
+      const backgroundColors = ["#28a745", "#ffc107", "#dc3545", "#6c757d"];
+      const borderColors = backgroundColors.slice();
+      const chartType = document.getElementById("chartTypeSelect").value;
+      if (statusChart) statusChart.destroy();
+      const ctx = document.getElementById("statusChart").getContext("2d");
+      statusChart = new Chart(ctx, {
+        type: chartType,
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Estados de Máquinas",
+            data: data,
+            backgroundColor: backgroundColors,
+            borderColor: borderColors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "bottom", labels: { font: { size: 14 } } },
+            title: { display: true, text: "Distribución de Estados de Máquinas", font: { size: 16 } },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.label || "";
+                  const value = context.raw || 0;
+                  return `${label}: ${value} máquina(s)`;
+                }
+              }
+            }
+          },
+          scales: chartType === "bar" ? { y: { beginAtZero: true } } : {}
+        }
+      });
+    }
+    document.getElementById("chartTypeSelect").addEventListener("change", updateStatusChart);
+
+    /*********************************************************
+     * CALCULAR STATUS GLOBAL DE UNA MÁQUINA
+     ********************************************************/
+    function getMachineOverallStatus(machineData) {
+      if (!machineData.points || !machineData.points.length) return "Sin lecturas";
+      let globalLatestDate = "";
+      let globalStatus = "Sin lecturas";
+      machineData.points.forEach(pt => {
+        if (!pt.readings || !pt.readings.length) return;
+        let thresholds;
+        if (machineData.config.useEstadistico) {
+          const velVals = [];
+          const accVals = [];
+          pt.readings.forEach(r => {
+            const vv = parseFloat(r.velocity);
+            const aa = parseFloat(r.acceleration);
+            if (!isNaN(vv)) velVals.push(vv);
+            if (!isNaN(aa)) accVals.push(aa);
+          });
+          const velStats = computeStats(velVals);
+          const accStats = computeStats(accVals);
+          const velAlert = velStats ? velStats.alerta : 99999;
+          const velAlarm = velStats ? velStats.alarma : 999999;
+          const accAlert = accStats ? accStats.alerta : 99999;
+          const accAlarm = accStats ? accStats.alarma : 999999;
+          thresholds = {
+            velocity: { alert: velAlert, alarm: velAlarm },
+            acceleration: { alert: accAlert, alarm: accAlarm }
+          };
+        } else {
+          thresholds = { velocity: { alert: 2.8, alarm: 4.5 }, acceleration: { alert: 0.5, alarm: 0.7 } };
+          if (machineData.config.vibrationConfig === "config2") { thresholds.velocity.alert = 4.5; thresholds.velocity.alarm = 7.1; }
+          else if (machineData.config.vibrationConfig === "config3") { thresholds.velocity.alert = 7.1; thresholds.velocity.alarm = 11.0; }
+        }
+        let latestPointDate = "";
+        let latestReading = null;
+        pt.readings.forEach(r => {
+          if (r.date && r.date > latestPointDate) {
+            latestPointDate = r.date;
+            latestReading = r;
+          }
+        });
+        if (latestReading) {
+          const v = parseFloat(latestReading.velocity);
+          const a = parseFloat(latestReading.acceleration);
+          if (!isNaN(v) || !isNaN(a)) {
+            const condVel = isNaN(v) ? "N/A" : v < thresholds.velocity.alert ? "Normal" : v < thresholds.velocity.alarm ? "Alerta" : "Alarma";
+            const condAcc = isNaN(a) ? "N/A" : a < thresholds.acceleration.alert ? "Normal" : a < thresholds.acceleration.alarm ? "Alerta" : "Alarma";
+            const worst = worstCondition(condVel, condAcc);
+            if (latestPointDate > globalLatestDate) {
+              globalLatestDate = latestPointDate;
+              globalStatus = worst;
+            } else if (latestPointDate === globalLatestDate) {
+              globalStatus = worstCondition(globalStatus, worst);
+            }
+          }
+        }
+      });
+      return globalStatus;
+    }
+    function worstCondition(cond1, cond2) {
+      const prioridad = ["Alarma", "Alerta", "Normal", "N/A", "Sin lecturas"];
+      let i1 = prioridad.indexOf(cond1);
+      let i2 = prioridad.indexOf(cond2);
+      if (i1 < 0) i1 = prioridad.length - 1;
+      if (i2 < 0) i2 = prioridad.length - 1;
+      return (i1 <= i2) ? cond1 : cond2;
+    }
+
+    /*********************************************************
+     * GUARDAR Y CARGAR ARCHIVO CON FILE SYSTEM ACCESS API
+     ********************************************************/
+    async function guardarEnArchivo() {
+      const opciones = {
+        types: [{
+          description: "Archivos JSON",
+          accept: { "application/json": [".json"] }
+        }]
+      };
+      try {
+        const handle = await window.showSaveFilePicker(opciones);
+        const writable = await handle.createWritable();
+        const machines = getAllMachines();
+        await writable.write(JSON.stringify(machines, null, 2));
+        await writable.close();
+        alert("Datos guardados en el archivo seleccionado.");
+      } catch (err) {
+        console.error(err);
+        alert("Error al guardar el archivo.");
+      }
+    }
+    async function cargarDesdeArchivo() {
+      const opciones = {
+        types: [{
+          description: "Archivos JSON",
+          accept: { "application/json": [".json"] }
+        }]
+      };
+      try {
+        const [handle] = await window.showOpenFilePicker(opciones);
+        const file = await handle.getFile();
+        const contents = await file.text();
+        localStorage.setItem("allMachines", contents);
+        updateMachineList();
+        alert("Datos cargados correctamente desde el archivo.");
+      } catch (err) {
+        console.error(err);
+        alert("Error al cargar el archivo.");
+      }
+    }
+    document.getElementById("guardarArchivoBtn").addEventListener("click", guardarEnArchivo);
+    document.getElementById("cargarArchivoBtn").addEventListener("click", cargarDesdeArchivo);
+
+    /*********************************************************
+     * INICIALIZACIÓN
+     ********************************************************/
+    (function init() {
+      updateThresholdDisplay();
+      updateMachineList();
+      clearUI();
+    })();
+  </script>
+</body>
+</html>
